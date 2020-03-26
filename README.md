@@ -1,2 +1,2 @@
 # measurement
-A library for reading and writing hierarchical measurement data and metadata.
+A library for reading and writing hierarchical measurement data in multiple formats. 
