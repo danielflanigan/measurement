@@ -2,9 +2,9 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 import copy
 import numpy as np
 
-from kid_readout.measurement import core, basic
-from kid_readout.measurement.io import memory
-from kid_readout.measurement.test import utilities
+from measurement import core, measurements
+from measurement.io import dictionary
+from measurement.test import utilities
 
 
 def test_measurement_instantiation_blank():
@@ -17,20 +17,20 @@ def test_measurement_instantiation_blank():
 
 
 def test_node_composite_add_origin():
-    original = utilities.fake_single_sweep_stream()
-    io = memory.Dictionary()
+    original = utilities.fake_sweep_stream()
+    io = dictionary.Dictionary()
     name = 'sweep_stream'
     io.write(original, name)
     ss = io.read(name)
-    ss_df = ss.to_dataframe()
+    ss_df = ss.to_dataframe(add_origin=True)
     for k, row in ss_df.iterrows():
         assert row.io_class == 'Dictionary'
         assert row.root_path is None
         assert row.node_path == core.join('/', name)
     sweep = io.read(core.join(name, 'sweep'))
     stream = io.read(core.join(name, 'stream'))
-    composite = basic.SingleSweepStream(sweep=sweep, stream=stream)
-    composite_df = composite.to_dataframe()
+    composite = measurements.SweepStream(sweep=sweep, stream=stream)
+    composite_df = composite.to_dataframe(add_origin=True)
     for k, row in composite_df.iterrows():
         assert row.io_class is None
         assert row.root_path is None
@@ -43,38 +43,26 @@ def test_node_composite_add_origin():
         assert row['stream.node_path'] == core.join('/', name, 'stream')
 
 
-# TODO: implement after add_legacy_origin is fixed.
-"""
-def test_measurement_add_legacy_origin():
-    m = core.Measurement()
-    df = m.to_dataframe()
-    assert df is None
-    df = pd.DataFrame([0])  # This creates a DataFrame with shape (1, 1).
-    m.add_legacy_origin(df)
-    assert df.shape == (1, 1 + 2)
-    s = df.iloc[0]
-    assert s.io_module == 'kid_readout.measurement.legacy'
-    assert s.root_path is None
-"""
-
-
 def test_measurement_list():
     length = 3
-    contents = [utilities.CornerCases() for n in range(length)]
+    contents = [utilities.CornerCases() for _ in range(length)]
     ml = core.MeasurementList(contents)
     assert len(ml) == length
     assert np.all(ml == contents)
     assert np.all(m._parent is ml for m in ml)
 
 
+# ToDo: replace with single point
+"""
 def test_io_list():
     num_streams = 3
     streams = core.MeasurementList([utilities.CornerCases() for n in range(num_streams)])
-    io = memory.Dictionary()
-    sweep = basic.SingleSweep(core.IOList())
+    io = dictionary.Dictionary()
+    sweep = measurements.FrequencySweep(core.IOList())
     io.write(sweep)
     sweep.streams.extend(streams)
-    assert io.read(io.node_names()[0]) == basic.SingleSweep(streams)
+    assert io.read(io.node_names()[0]) == measurements.FrequencySweep(streams)
+"""
 
 
 # ToDo: flesh out
@@ -85,7 +73,7 @@ def test_state_dict():
 
 
 def test_read_write():
-    io = memory.Dictionary()
+    io = dictionary.Dictionary()
     original = utilities.CornerCases()
     name = 'test'
     io.write(original, name)
@@ -102,13 +90,14 @@ def test_eq_state():
 
 
 def test_eq_array():
-    m1 = utilities.fake_single_stream()
-    m2 = basic.SingleStream(**dict([(k, copy.copy(v)) for k, v in m1.__dict__.items() if not k.startswith('_')]))
+    m1 = utilities.fake_time_ordered_stream()
+    m2 = measurements.TimeOrderedStream(**dict([(k, copy.copy(v)) for k, v in m1.__dict__.items()
+                                                if not k.startswith('_')]))
     assert m1 == m2
-    index = np.random.random_integers(0, m1.s21_raw.size)
-    m2.s21_raw[index] += 1
+    index = np.random.random_integers(0, m1.data.size)
+    m2.data[index] += 1
     assert m1 != m2
-    m1.s21_raw[index] = m2.s21_raw[index] = np.nan
+    m1.data[index] = m2.data[index] = np.nan
     assert m1 == m2
 
 
@@ -155,6 +144,7 @@ def test_validate_node_path():
             raise AssertionError("Valid path {} should not have failed.".format(good))
 
 
+"""
 def test_sweep_stream_array_node_path():
     original = utilities.fake_sweep_stream_array()
     # The current node path reflects the existing structure, while the IO node path is None until a read or write.
@@ -167,7 +157,7 @@ def test_sweep_stream_array_node_path():
     assert original.sweep_array.stream_arrays[0].current_node_path == '/sweep_array/stream_arrays/0'
     assert original.sweep_array.stream_arrays[0].io_node_path is None
     # Write the tree to disk.
-    io = memory.Dictionary()
+    io = dictionary.Dictionary()
     name = 'ssa'
     io.write(original, name)
     # The current node path is unchanged, while the IO node path reflects how it has been stored to disk.
@@ -219,3 +209,4 @@ def test_sweep_stream_array_node_path():
     assert moved.stream_arrays.io_node_path == '/ssa/sweep_array/stream_arrays'
     assert moved.stream_arrays[0].current_node_path == '/moved/stream_arrays/0'
     assert moved.stream_arrays[0].io_node_path == '/ssa/sweep_array/stream_arrays/0'
+"""

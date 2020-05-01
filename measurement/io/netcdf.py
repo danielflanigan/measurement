@@ -25,12 +25,11 @@ import os
 
 import netCDF4
 import numpy as np
-from memoized_property import memoized_property
 
-from measurement import core, basic
+from measurement import core
 
 
-class Netcdf(core.IO):
+class NetcdfIO(core.IO):
     # This can be used as a conventional extension for files created by this IO class, but it is not used or enforced
     # anywhere internally.
     EXTENSION = '.nc'
@@ -56,7 +55,7 @@ class Netcdf(core.IO):
     is_list = '.list'
 
     def __init__(self, root_path, metadata=None, cache_s21_raw=False):
-        super(Netcdf, self).__init__(root_path=os.path.expanduser(root_path), metadata=metadata)
+        super(NetcdfIO, self).__init__(root_path=os.path.expanduser(root_path), metadata=metadata)
         self.cache_s21_raw = cache_s21_raw
 
     def _root_path_exists(self, root_path):
@@ -167,7 +166,7 @@ class Netcdf(core.IO):
 
     def _get_node(self, node_path):
         if self.closed:
-            raise ValueError("I/O operation on closed file")
+            raise OSError("I/O operation on closed file")
         node = self._root
         if node_path != '':
             core.validate_node_path(node_path)
@@ -266,7 +265,7 @@ class Netcdf(core.IO):
 
 
 # Classes that implement caching of s21_raw
-
+'''
 
 class NCVariable(object):
 
@@ -376,3 +375,4 @@ class NCSingleStream(basic.SingleStream):
     @s21_raw.setter
     def s21_raw(self, s21):
         pass
+'''

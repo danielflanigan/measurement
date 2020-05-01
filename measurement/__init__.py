@@ -24,7 +24,7 @@ To create a new measurement, simply write a subclass of Measurement that follows
 The arguments to __init__() define the data format. Example:
 
 # The class must inherit Measurement.
-class TimeOrderedData(Measurement):
+class TimeOrderedStream(Measurement):
 
     # These entries assert that the class has public attribute 'time' that is a 1-D numpy ndarray, and that it has
     # a public attribute 'data' that is also a numpy ndarray with data.shape = (time.size,), i.e. the arrays have
@@ -43,7 +43,7 @@ class TimeOrderedData(Measurement):
         # array. See the Measurement docstring for restrictions on its value.
         self.not_an_array = not_an_array
         # Call Measurement.__init__() after assigning all arrays.
-        super(TimeOrderedData, self).__init__(state=state, description=description)
+        super(TimeOrderedStream, self).__init__(state=state, description=description)
         # This doesn't have to be recorded as an attribute because it has a default value, so the measurement can be
         # resurrected without a value for it saved on disk.
         if analyze_me:

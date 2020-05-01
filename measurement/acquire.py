@@ -213,9 +213,9 @@ def new_netcdf(suffix='', directory=settings.BASE_DATA_DIR, metadata=None):
         suffix = '_' + suffix
     if metadata is None:
         metadata = all_metadata()
-    root_path = os.path.join(directory, time.strftime('%Y-%m-%d_%H%M%S') + suffix + netcdf.Netcdf.EXTENSION)
-    logger.debug("Creating new Netcdf with path %s" % root_path)
-    return netcdf.Netcdf(root_path, metadata=metadata)
+    root_path = os.path.join(directory, time.strftime('%Y-%m-%d_%H%M%S') + suffix + netcdf.NetcdfIO.EXTENSION)
+    logger.debug("Creating new NetcdfIO with path %s" % root_path)
+    return netcdf.NetcdfIO(root_path, metadata=metadata)
 
 
 def new_npyjson(suffix='', directory=settings.BASE_DATA_DIR, metadata=None):
@@ -223,9 +223,9 @@ def new_npyjson(suffix='', directory=settings.BASE_DATA_DIR, metadata=None):
         suffix = '_' + suffix
     if metadata is None:
         metadata = all_metadata()
-    root_path = os.path.join(directory, time.strftime('%Y-%m-%d_%H%M%S') + suffix + npyjson.NpyJson.EXTENSION)
-    logger.debug("Creating new NpyJson with path %s" % root_path)
-    return npy.NpyJson(root_path, metadata=metadata)
+    root_path = os.path.join(directory, time.strftime('%Y-%m-%d_%H%M%S') + suffix + npyjson.NpyJsonIO.EXTENSION)
+    logger.debug("Creating new NpyJsonIO with path %s" % root_path)
+    return npy.NpyJsonIO(root_path, metadata=metadata)
 
 
 # Interactive checks to be used at the beginning of scripts

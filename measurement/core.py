@@ -24,8 +24,6 @@ import re
 import numpy as np
 import pandas as pd
 
-from measurement import classes
-
 CLASS_NAME = '_class'  # This is the string used by IO objects to save class names.
 VERSION = '_version'  # This is the string used by IO objects to save class versions.
 METADATA = '_metadata'  # This is the string used by IO objects to save metadata dictionaries.
@@ -36,11 +34,9 @@ IO_CLASS_NAME = 'io_class'  # This is the fully-qualified name of the IO class u
 ROOT_PATH = 'root_path'  # This is the root file or directory from which a measurement was read from disk.
 NODE_PATH = 'node_path'  # This is the node path from the root node to the measurement node.
 NUMBER = 'number'  # This is the index of a single measurement slice from an array-like measurement.
-
-# IO_MODULE = 'io_module'  # This is the full-qualified name of the module used to read and write legacy data.
-RESERVED = [IO_CLASS_NAME, ROOT_PATH, NODE_PATH, NUMBER]  # io_node_path is included here
+RESERVED = (IO_CLASS_NAME, ROOT_PATH, NODE_PATH, NUMBER)  # io_node_path is included here
 # These strings have a corresponding private attribute.
-PRIVATE = ['io_node_path']
+PRIVATE = ('io_node_path',)
 
 # This character separates nodes in a node path.
 NODE_PATH_SEPARATOR = '/'
@@ -98,6 +94,7 @@ class Node(object):
         """
         return self._io_node_path
 
+    # ToDo: has this actually been tested?
     @property
     def current_node_path(self):
         """
@@ -120,6 +117,7 @@ class Node(object):
         else:
             return join(self._parent.current_node_path, self._parent._locate(self))
 
+    # ToDo: should this be a Measurement method? Or part of the to_dataframe method?
     def add_origin(self, dataframe):
         """
         Add to the given dataframe enough information to load the data from which it was created.
@@ -134,7 +132,7 @@ class Node(object):
         create columns
         `io_class_name`: None
         etc., because the top-level node has no origin information, and will also create columns
-        `child.io_class_name`: NCFile
+        `child.io_class_name`: NetcdfIO
         and so on. The from_series() function will be able to load the child measurements once the prefix is stripped.
 
         Parameters
@@ -202,6 +200,7 @@ class Node(object):
         -------
         None
         """
+        # ToDo: add conversion to StateDict of public dict instances
         if not key.startswith('_') and isinstance(value, Node):
             value._parent = self
         super(Node, self).__setattr__(key, value)
@@ -214,7 +213,7 @@ class Measurement(Node):
     module docstring and below.
 
     Array dimensions.
-    Each measurement has a dimensions class attribute that contains metadata for its array dimensions. This is
+    Each measurement has a class attribute `dimensions` that contains metadata for its array dimensions. This is
     necessary for the netCDF4 IO class to handle the array dimensions correctly, and it also allows the classes to
     check the dimensions of their arrays on instantiation through the _validate_dimensions() method. The format of the
     an entry in the dimensions OrderedDict is 'array_name': dimension_tuple, where dimension tuple is a tuple of strings
@@ -233,10 +232,8 @@ class Measurement(Node):
     were True.
 
     Content restrictions.
-    Measurements store state information in a dictionary. (They actually use a subclass called StateDict, which has
-    extra access features and validation.) Supporting multiple
-
-
+    Measurements store state information in a dictionary subclass called StateDict, which has attribute access and
+    validation.
     """
 
     _version = 0
@@ -266,7 +263,7 @@ class Measurement(Node):
         """
         super(Measurement, self).__init__()
         if state is None:
-            state = {}
+            state = dict()
         self.state = StateDict(state)
         self.description = description
         if validate:
@@ -276,17 +273,19 @@ class Measurement(Node):
         public = dict([(k, v) for k, v in self.__dict__.items() if not k.startswith('_')])
         return class_(**public)
 
-    def to_dataframe(self):
+    # ToDo: should this be a Node method?
+    def to_dataframe(self, add_origin=False):
         """
         This method should return a pandas DataFrame containing state information and analysis products, such as fit
         parameters, but not large objects such as time-ordered data.
 
-        Returns
-        -------
-        pandas.DataFrame
-            A DataFrame containing data from this measurement.
+        :param add_origin: if True, add origin information to the DataFrame; see add_origin().
+        :return: a pandas.DataFrame containing data from this measurement.
         """
-        return pd.DataFrame({'description': self.description}, index=[0])
+        df = pd.DataFrame({'description': self.description}, index=[0])
+        if add_origin:
+            self.add_origin(df)
+        return df
 
     def _validate_dimensions(self):
         for name, dimension_tuple in self.dimensions.items():
@@ -502,7 +501,7 @@ class StateDict(dict):
     __getstate__ = lambda: None
     __slots__ = ()
 
-    ALLOWED_VALUE_TYPES = (Number, str, unicode)  # (Number, np.number, str, unicode)
+    ALLOWED_VALUE_TYPES = (Number, str)  # (str, unicode)  # (Number, np.number, str, unicode)
 
     _invalid_key_type = "Dictionary keys must be strings."
     _invalid_variable_name = "Invalid variable name: {0}"
@@ -512,7 +511,7 @@ class StateDict(dict):
     def __init__(self, *args, **kwargs):
         super(StateDict, self).__init__(*args, **kwargs)
         for key, value in self.items():
-            if not isinstance(key, (str, unicode)):
+            if not isinstance(key, str):  # (str, unicode)):
                 raise MeasurementError(self._invalid_key_type)
             elif re.match(r'[a-zA-Z_][a-zA-Z0-9_]*$', key) is None or keyword.iskeyword(key) or key in __builtins__:
                 raise MeasurementError(self._invalid_variable_name.format(key))
@@ -606,7 +605,7 @@ class IO(object):
                 raise ValueError("Cannot set metadata for an existing root: {}".format(root_path))
             self._root = self._open_existing(self.root_path)
             try:
-                metadata = self.read_other('/', METADATA)
+                metadata = self.read_other(NODE_PATH_SEPARATOR, METADATA)
                 if metadata is not None:
                     self.metadata = StateDict(metadata)
                 else:
@@ -615,7 +614,7 @@ class IO(object):
                 self.metadata = None
         else:
             self._root = self._create_new(self.root_path)
-            self.write_other('/', METADATA, metadata)
+            self.write_other(NODE_PATH_SEPARATOR, METADATA, metadata)
             self.metadata = metadata
 
     # These private methods must be implemented by subclasses.
@@ -753,7 +752,7 @@ class IO(object):
         """
         pass
 
-    def node_names(self, node_path='/'):
+    def node_names(self, node_path=NODE_PATH_SEPARATOR):
         """
         Return the names of all nodes contained in the node at node_path.
         """
@@ -799,12 +798,12 @@ class IO(object):
         """
         self.create_node(node_path)
         self.write_other(node_path, CLASS_NAME, node.class_name())
-        if hasattr(node, '_version'):
-            self.write_other(node_path, VERSION, getattr(node, '_version'))
+        if hasattr(node, VERSION):  # ToDo: seems like this should always be True
+            self.write_other(node_path, VERSION, getattr(node, VERSION))
         else:
             self.write_other(node_path, VERSION, None)
         for key, value in node.__dict__.items():
-            if not key.startswith('_'):
+            if not key.startswith('_'):  # Private attributes are not written to disk
                 if isinstance(value, Node):
                     self._write_node(value, join(node_path, key))
                 elif hasattr(node, 'dimensions') and key in node.dimensions:
@@ -828,7 +827,7 @@ class IO(object):
             version = self.read_other(node_path, VERSION)
         except ValueError:
             version = None
-        full_class_name = translate.get(saved_class_name, classes.full_name(saved_class_name, version))
+        full_class_name = translate.get(saved_class_name, full_name(saved_class_name, version))
         class_ = get_class(full_class_name)
         measurement_names = self.node_names(node_path)
         if issubclass(class_, MeasurementList):
@@ -862,7 +861,7 @@ def get_class(full_class_name):
 
 # ToDo: look at effect of None in number field, and handle it here
 def from_series(series):
-    io_class = get_class(classes.full_name(class_name=series[IO_CLASS_NAME], version=None))
+    io_class = get_class(full_name(class_name=series[IO_CLASS_NAME], version=None))
     io = io_class(series[ROOT_PATH])
     node = io.read(series[NODE_PATH])
     if NUMBER in series and pd.notnull(series[NUMBER]):
@@ -928,6 +927,79 @@ def _instantiate(class_, variables, force):
         if extras:
             raise MeasurementError("Extra values are present on disk: {}".format(extras))
     return instance
+
+
+def full_name(class_name, version):
+    """
+    Return the fully-qualified name of the given class that corresponds to the given version number.
+
+    If `version` is None, `class_name` is treated as unversioned, in which case it can be either a bare class name
+    (e.g. Measurement) or a fully-qualified class name (e.g. measurement.core.Measurement'). If this module has no entry
+    for an unversioned class it will return the name it was passed.
+
+    Parameters
+    ----------
+    class_name : str
+        The class name to look up.
+    version : int (None for unversioned classes)
+        The version number.
+
+    Returns
+    -------
+    str
+        The fully-qualified class name corresponding to `class_name` and `version`, if applicable.
+
+    Raises
+    ------
+    ValueError
+        If `class_name` is listed as versioned here but `version` is None.
+    """
+    if version is None:
+        if class_name in _versioned:
+            raise ValueError("{} is versioned but version number is None".format(class_name))
+        return _unversioned.get(class_name, class_name)
+    else:
+        return _versioned[class_name][version]
+
+
+def latest_version_number(class_name):
+    """
+
+    Parameters
+    ----------
+    class_name : str
+        The class name to look up.
+
+    Returns
+    -------
+    int
+        The latest version number for the given class.
+
+    """
+    try:
+        return max(_versioned[class_name].keys())
+    except KeyError:
+        raise ValueError("Class {} has no version information.".format(class_name))
+
+
+# This dict should include entries for all classes with version information that are saved to disk.
+# Convention: when a version number is deprecated, add the version number to the end of the name of the class that
+# should now load it.
+_versioned = {'Measurement': {0: 'measurement.core.Measurement'},
+              'MeasurementList': {0: 'measurement.core.MeasurementList'},
+              'CornerCases': {0: 'measurement.test.utilities.CornerCases'},
+              'TimeOrderedStream': {0: 'measurement.measurements.TimeOrderedStream'},
+              'TimeOrderedStreamArray': {0: 'measurement.measurements.TimeOrderedStreamArray'},
+              'FrequencySweep': {0: 'measurement.measurements.FrequencySweep'},
+              'SweepStream': {0: 'measurement.measurements.SweepStream'}
+              }
+
+# This dict includes the IO implementations, which have no version numbers, as well as any classes that have no version
+# information. For these, it should map fully-qualified class name to fully-qualified class name.
+_unversioned = {'Dictionary': 'measurement.io.dictionary.Dictionary',
+                'NetcdfIO': 'measurement.io.netcdf.NetcdfIO',
+                'NpyJsonIO': 'measurement.io.npyjson.NpyJsonIO'
+                }
 
 
 # Node-related functions
